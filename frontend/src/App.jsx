@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import VideoCard from './components/VideoCard'
 import { useToast, Toaster } from './components/Toast'
-import Login from './components/Login'
 import { Capacitor } from '@capacitor/core'
 import { Filesystem, Directory } from '@capacitor/filesystem'
 
@@ -45,11 +44,6 @@ function buildCommands(vids, qual, fmt, dir, playlistUrl) {
 }
 
 export default function App() {
-  const [token, setToken] = useState(() => sessionStorage.getItem('yt_auth_token') || '')
-  const [currentUser, setCurrentUser] = useState(() => sessionStorage.getItem('yt_auth_user') || '')
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [authLoading, setAuthLoading] = useState(true)
-
   const [url, setUrl] = useState('')
   const [quality, setQuality] = useState('bestvideo[height<=1080]+bestaudio/best')
   const [format, setFormat] = useState('mp4')
@@ -64,67 +58,6 @@ export default function App() {
   const { toasts, notify, dismiss } = useToast()
 
   const apiBase = import.meta.env.VITE_API_URL || ''
-
-  useEffect(() => {
-    async function checkSession() {
-      const savedToken = sessionStorage.getItem('yt_auth_token')
-      if (!savedToken) {
-        setAuthLoading(false)
-        return
-      }
-      try {
-        const res = await fetch(`${apiBase}/api/auth/verify`, {
-          headers: { Authorization: `Bearer ${savedToken}` },
-        })
-        if (res.ok) {
-          const data = await res.json()
-          setToken(savedToken)
-          setCurrentUser(data.user?.username || 'mmorir')
-          setIsAuthenticated(true)
-        } else {
-          sessionStorage.removeItem('yt_auth_token')
-          sessionStorage.removeItem('yt_auth_user')
-          setToken('')
-          setCurrentUser('')
-          setIsAuthenticated(false)
-        }
-      } catch (_) {
-        setIsAuthenticated(false)
-      } finally {
-        setAuthLoading(false)
-      }
-    }
-    checkSession()
-  }, [])
-
-  function handleLoginSuccess({ token: newToken, user }) {
-    sessionStorage.setItem('yt_auth_token', newToken)
-    sessionStorage.setItem('yt_auth_user', user.username)
-    setToken(newToken)
-    setCurrentUser(user.username)
-    setIsAuthenticated(true)
-    notify(`Connecté en tant que ${user.username}`, 'success')
-  }
-
-  async function handleLogout() {
-    try {
-      if (token) {
-        await fetch(`${apiBase}/api/logout`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-        })
-      }
-    } catch (_) {}
-    sessionStorage.removeItem('yt_auth_token')
-    sessionStorage.removeItem('yt_auth_user')
-    setToken('')
-    setCurrentUser('')
-    setIsAuthenticated(false)
-    setVideos([])
-    setPlaylistInfo(null)
-    setCmdOutput('')
-    notify('Déconnexion réussie', 'info')
-  }
 
   function toggleSelect(id) {
     setSelected(prev => {
@@ -157,13 +90,7 @@ export default function App() {
     setSelected(new Set())
     try {
       if (isPlaylistUrl(trimmedUrl)) {
-        const res = await fetch(`${apiBase}/api/playlist?url=${encodeURIComponent(trimmedUrl)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.status === 401) {
-          handleLogout()
-          throw new Error('Session expirée. Veuillez vous reconnecter.')
-        }
+        const res = await fetch(`${apiBase}/api/playlist?url=${encodeURIComponent(trimmedUrl)}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
         const newVideos = data.videos.map(v => ({ ...v, status: 'waiting', progress: 0 }))
@@ -172,13 +99,7 @@ export default function App() {
         setCmdOutput('')
         notify(`${data.count} vidéo${data.count > 1 ? 's' : ''} chargée${data.count > 1 ? 's' : ''}`, 'success')
       } else {
-        const res = await fetch(`${apiBase}/api/video?url=${encodeURIComponent(trimmedUrl)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        if (res.status === 401) {
-          handleLogout()
-          throw new Error('Session expirée. Veuillez vous reconnecter.')
-        }
+        const res = await fetch(`${apiBase}/api/video?url=${encodeURIComponent(trimmedUrl)}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error ?? 'Erreur serveur')
         const video = { ...data, index: 1, status: 'waiting', progress: 0 }
@@ -210,7 +131,7 @@ export default function App() {
   }
 
   async function downloadVideo(video, index) {
-    const params = new URLSearchParams({ url: video.url, quality, format, dir: outputDir, token })
+    const params = new URLSearchParams({ url: video.url, quality, format, dir: outputDir })
 
     return new Promise((resolve, reject) => {
       let settled = false
@@ -331,23 +252,6 @@ export default function App() {
 
   const allSelected = videos.length > 0 && selected.size === videos.length
 
-  if (authLoading) {
-    return (
-      <div className="auth-loading-screen">
-        <span className="spinner" style={{ width: 32, height: 32, borderWidth: 3 }} />
-      </div>
-    )
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <>
-        <Login onLoginSuccess={handleLoginSuccess} />
-        <Toaster toasts={toasts} onDismiss={dismiss} />
-      </>
-    )
-  }
-
   return (
     <>
       <header>
@@ -358,20 +262,6 @@ export default function App() {
         </div>
         <h1>YT Downloader</h1>
         <span className="header-tag">Usage privé uniquement</span>
-        <div className="header-right">
-          <span className="user-badge">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-            </svg>
-            {currentUser || 'mmorir'}
-          </span>
-          <button className="btn-logout" onClick={handleLogout} title="Se déconnecter">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-            </svg>
-            <span>Déconnexion</span>
-          </button>
-        </div>
       </header>
 
       <main>

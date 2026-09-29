@@ -10,58 +10,7 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
-const AUTH_USERNAME = process.env.AUTH_USERNAME || 'morir'
-const AUTH_PASSWORD = process.env.AUTH_PASSWORD || '6624'
 
-// Session tokens store: token -> { username, createdAt }
-const activeTokens = new Map()
-
-function extractToken(req) {
-  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
-    return req.headers.authorization.slice(7).trim()
-  }
-  if (req.query && req.query.token) {
-    return String(req.query.token).trim()
-  }
-  return null
-}
-
-function requireAuth(req, res, next) {
-  const token = extractToken(req)
-  if (!token || !activeTokens.has(token)) {
-    return res.status(401).json({ error: 'Non autorisé. Veuillez vous connecter.' })
-  }
-  req.user = activeTokens.get(token)
-  next()
-}
-
-// Authentication endpoints
-app.post('/api/login', (req, res) => {
-  const { username, password } = req.body || {}
-  if (username === AUTH_USERNAME && password === AUTH_PASSWORD) {
-    const token = crypto.randomBytes(32).toString('hex')
-    activeTokens.set(token, { username, createdAt: Date.now() })
-    return res.json({ success: true, token, user: { username } })
-  }
-  return res.status(401).json({ error: 'Identifiant ou mot de passe incorrect' })
-})
-
-app.get('/api/auth/verify', (req, res) => {
-  const token = extractToken(req)
-  if (token && activeTokens.has(token)) {
-    const session = activeTokens.get(token)
-    return res.json({ valid: true, user: { username: session.username } })
-  }
-  return res.status(401).json({ error: 'Session invalide ou expirée' })
-})
-
-app.post('/api/logout', (req, res) => {
-  const token = extractToken(req)
-  if (token) {
-    activeTokens.delete(token)
-  }
-  res.json({ success: true })
-})
 
 function runYtDlp(url) {
   return new Promise((resolve, reject) => {
@@ -92,7 +41,7 @@ function formatDuration(seconds) {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-app.get('/api/video', requireAuth, async (req, res) => {
+app.get('/api/video', async (req, res) => {
   const { url } = req.query
   if (!url) return res.status(400).json({ error: 'URL manquante' })
 
@@ -126,7 +75,7 @@ app.get('/api/video', requireAuth, async (req, res) => {
   }
 })
 
-app.get('/api/playlist', requireAuth, async (req, res) => {
+app.get('/api/playlist', async (req, res) => {
   const { url } = req.query
   if (!url) return res.status(400).json({ error: 'URL manquante' })
 
@@ -147,7 +96,7 @@ app.get('/api/playlist', requireAuth, async (req, res) => {
   }
 })
 
-app.get('/api/download', requireAuth, (req, res) => {
+app.get('/api/download', (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream; charset=utf-8')
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Connection', 'keep-alive')
