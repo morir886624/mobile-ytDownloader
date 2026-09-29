@@ -1,0 +1,15 @@
+{
+  "name": "yt-downloader",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "install:frontend": "npm --prefix frontend install",
+    "install:backend": "npm --prefix backend install",
+    "prebuild": "npm --prefix frontend install",
+    "build": "npm --prefix frontend run build",
+    "predev:frontend": "npm --prefix frontend install",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "npm --prefix backend run dev",
+    "start:backend": "npm --prefix backend run start"
+  }
+}

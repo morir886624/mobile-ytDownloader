@@ -1,0 +1,52 @@
+name: yt-downloader
+
+services:
+
+  # --- BACKEND ---
+
+  backend:
+    build: ./backend
+    volumes:
+      # Montage du code source pour le hot reload
+      - ./backend:/app
+      # Volume nommé pour isoler les node_modules du conteneur
+      - backend-node_modules:/app/node_modules
+      # Dossier de destination des téléchargements
+      - ${HOST_DOWNLOAD_DIR:-./downloads}:/downloads
+    environment:
+      - DOWNLOAD_DIR=/downloads
+    networks:
+      - yt-network
+    restart: unless-stopped
+
+  # --- FRONTEND ---
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      # Montage du code source pour le hot reload
+      - ./frontend:/app
+      # Volume nommé pour isoler les node_modules du conteneur
+      - frontend-node_modules:/app/node_modules
+    environment:
+      # URL du backend dans le réseau Docker (utilisée par le proxy Vite)
+      - BACKEND_URL=http://backend:3001
+      # Dossier par défaut affiché dans l'UI (doit correspondre au volume /downloads)
+      - VITE_DEFAULT_DOWNLOAD_DIR=/downloads
+    networks:
+      - yt-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+# Volumes nommés — node_modules isolés pour éviter les conflits avec le montage local
+volumes:
+  frontend-node_modules:
+  backend-node_modules:
+
+# Réseau bridge dédié — les services communiquent par leur nom (ex: "backend:3001")
+networks:
+  yt-network:
+    driver: bridge
