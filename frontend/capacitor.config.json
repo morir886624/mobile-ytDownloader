@@ -1,5 +1,8 @@
 {
   "appId": "com.yt.downloader",
   "appName": "mobile-ytDownloader",
-  "webDir": "../dist"
+  "webDir": "../dist",
+  "server": {
+    "cleartext": true
+  }
 }
